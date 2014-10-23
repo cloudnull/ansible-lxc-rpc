@@ -39,4 +39,8 @@
     cron_file: "{{ item.name }}"
   with_items:
     - { name: "l3_agent_migrate", command: "--l3-agent-migrate" }
-    - { name: "replicate_dhcp", command: "--replicate-dhcp" }
+
+- name: Remove replicate_dhcp if found.
+  file:
+    path: "/etc/cron.d/replicate_dhcp"
+    state: "absent"
