@@ -509,13 +509,17 @@ def container_skel_load(container_skel, inventory, config):
                 network = pn['network']
                 if 'ip_from_q' in network and 'group_binds' in network:
                     q_name = network['ip_from_q']
+                    container_netmask = network.get('netmask')
+                    if not container_netmask:
+                        container_netmask = provider_queues['%s_netmask' % q_name]
+
                     for group in network['group_binds']:
                         _add_additional_networks(
                             key=group,
                             inventory=inventory,
                             ip_q=provider_queues[q_name],
                             k_name=q_name,
-                            netmask=provider_queues['%s_netmask' % q_name]
+                            netmask=container_netmask
                         )
 
                 if mgmt_bridge == network['container_bridge']:
@@ -525,8 +529,13 @@ def container_skel_load(container_skel, inventory, config):
                     mgmt_dict['container_interface'] = nci
                     mgmt_dict['container_bridge'] = ncb
                     if ncn:
-                        cidr_net = netaddr.IPNetwork(cidr_networks.get(ncn))
-                        mgmt_dict['container_netmask'] = str(cidr_net.netmask)
+                        if not container_netmask:
+                            cidr_net = netaddr.IPNetwork(
+                                cidr_networks.get(ncn)
+                            )
+                            container_netmask = str(cidr_net.netmask)
+
+                        mgmt_dict['container_netmask'] = container_netmask
 
         for host, hostvars in inventory['_meta']['hostvars'].iteritems():
             base_hosts = inventory['_meta']['hostvars'][host]
