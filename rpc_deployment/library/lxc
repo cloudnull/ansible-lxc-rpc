@@ -25,6 +25,7 @@ import os
 import shutil
 import tempfile
 import time
+import lxc
 
 
 DOCUMENTATION = """
@@ -335,8 +336,8 @@ COMMAND_MAP = {
 # This is used to attach to a running container and execute commands from
 # within the container on the host.  This will provide local access to a
 # container without using SSH.  The template will attempt to work within the
-# home directory of the user that was attached to the conatiner and source
-# that users environment variables by default.
+# home directory of the user that was attached to the container and source
+# the users environment variables by default.
 ATTACH_TEMPLATE = """
 %(command)s <<EOL
   pushd \$(grep \$(whoami) /etc/passwd | awk -F':' '{print \$6}')
