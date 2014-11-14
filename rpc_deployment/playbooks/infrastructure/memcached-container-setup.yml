@@ -13,5 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-- include: memcached-container-setup.yml
-- include: memcached-setup.yml
+- hosts: memcached
+  user: root
+  roles:
+    - container_extra_setup
+    - common
+  vars_files:
+    - vars/config_vars/container_config_memcached.yml
+    - vars/repo_packages/memcached.yml

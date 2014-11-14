@@ -19,14 +19,14 @@
     keyserver: "{{ item.keyserver }}"
     state: "present"
   with_items: gpg_keys
-  when: "ansible_distribution_version in ['12.04', '13.04', '13.10', '14.04']"
+  when: gpg_keys is defined
 
 - name: Add Common repos
   apt_repository:
     repo: "{{ item.repo }}"
     state: "{{ item.state }}"
   with_items: apt_common_repos
-  when: "ansible_distribution_version in ['12.04', '13.04', '13.10', '14.04']"
+  when: apt_common_repos is defined
   register: add_repos
   until: add_repos|success
   retries: 3
@@ -46,7 +46,7 @@
     update_cache: yes
     cache_valid_time: 600
   with_items: apt_common_packages
-  when: "ansible_distribution_version in ['12.04', '13.04', '13.10', '14.04']"
+  when: apt_common_packages is defined
   register: common_packages
   until: common_packages|success
   retries: 3

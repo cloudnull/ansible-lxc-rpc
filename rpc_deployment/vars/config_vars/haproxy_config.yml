@@ -176,3 +176,9 @@ haproxy_config:
       hap_backend_nodes: "{{ groups['swift_proxy'] }}"
       hap_port: 8888
       hap_balance_type: http
+  - service:
+      hap_service_name: pkg_repo
+      hap_backend_nodes: "{{ groups['pkg_repo'] }}"
+      hap_port: 8181
+      hap_backend_port: 80
+      hap_balance_type: http

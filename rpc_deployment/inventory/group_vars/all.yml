@@ -157,7 +157,8 @@ container_password: "{{ container_openstack_password }}"
 
 
 ## Memcached
-memcached_memory: 8192
+base_memcached_memory: "{{ ansible_memtotal_mb | default(1537) | int / 2 }}"
+memcached_memory: "{{ base_memcached_memory | int }}"
 memcached_port: 11211
 memcached_user: memcache
 memcached_secret_key: "{{ memcached_encryption_key }}"

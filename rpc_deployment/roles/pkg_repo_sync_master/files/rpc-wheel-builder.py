@@ -34,22 +34,94 @@ import yaml
 from cloudlib import logger
 
 
+"""Rackspace Private Cloud python wheel builder.
+
+This script is a simple python wheel building application that will read
+in yaml files that contain references to git repos and lists of python packages
+and then search for all things python that could be installed using pip.
+Anything discovered to be a python package will be build as a Python wheel.
+
+The reason that Python wheels were chosen as a method for packaging is simply
+tied to upstream support in addition to simplicity. Python wheels are supported
+in modern mainstream python and result in a more stable method of installation
+without the requirement of having to compile on the installation target.
+
+
+The YAML syntax for repo pacakge files is simple:
+    ## Git Source
+    git_repo: https://github.com/USERNAME/REPOSITORY
+    git_install_branch: BRANCH|TAG|SHA
+
+    service_pip_dependencies:
+      - pywbem
+      - ecdsa
+      - MySQL-python
+      - python-memcached
+      - pycrypto
+      - python-cinderclient
+      - python-keystoneclient
+      - keystonemiddleware
+      - httplib2
+
+
+This script will build all of the wheels for everything in the
+``service_pip_dependencies`` array and scan the git repo for any requirement
+file as found in the constant ``REQUIREMENTS_FILE_TYPES`` here within the
+script. Pip dependencies can be a member of any variable found in the constant
+``BUILT_IN_PIP_PACKAGE_VARS`` here within the script.
+
+Other git repo types can be added to the script by updating the
+``GIT_REQUIREMENTS_MAP`` constant with an appropriate mapping to where RAW
+files can be found.
+
+Upon completion of the script a pools directory will be updated with all of the
+built wheels. The release provided will be a directory full of links pointing
+back to the built wheels for the release. This allows you to have multiple
+releases with different requirements while also not rebuilding wheels that
+already exist.
+"""
+
+
 PYTHON_PACKAGES = {
     'base_release': dict(),
     'known_release': dict(),
     'from_git': dict(),
     'required_packages': dict(),
+    'test_requirements': dict(),
     'built_files': list()
 }
 
-GIT_REPOS = []
+GIT_REPOS = list()
 
+
+# Templates for online git repositories that we scan through in order to
+# discover requirements files and installable python packages.
 GIT_REQUIREMENTS_MAP = {
     'github.com': 'https://raw.githubusercontent.com/%(path)s/%(branch)s'
                   '/%(file)s',
     'openstack.org': 'https://git.openstack.org/cgit/%(path)s/plain'
                      '/%(file)s?id=%(branch)s'
 }
+
+
+# List of variable names that could be used within the RPC yaml files that
+# represent lists of python packages.
+BUILT_IN_PIP_PACKAGE_VARS = [
+    'service_pip_dependencies',
+    'pip_common_packages',
+    'pip_container_packages'
+]
+
+# Requirements files types is a list of tuples that search for an online
+# requirements files and where to file the found items. The tuple will be
+# (TYPE, 'file name'). The type should directly correspond to a dict in
+# PYTHON_PACKAGES
+REQUIREMENTS_FILE_TYPES = [
+    ('base_release', 'requirements.txt'),
+    ('base_release', 'global-requirements.txt'),
+    ('test_requirements', 'test-requirements.txt')
+]
+
 
 VERSION_DESCRIPTORS = [
     '>=', '<=', '==', '!=', '<', '>'
@@ -129,7 +201,7 @@ def get_file_names(path, ext=None):
         return files
 
 
-def requirements_parse(pkgs):
+def requirements_parse(pkgs, base_type='base_release'):
     """Parse all requirements.
 
     :param pkgs: ``list`` list of all requirements to parse.
@@ -158,7 +230,7 @@ def requirements_parse(pkgs):
             name = split_pkg[0]
             versions = None
 
-        base_release = PYTHON_PACKAGES['base_release']
+        base_release = PYTHON_PACKAGES[base_type]
         if name in base_release:
             saved_versions = base_release[name]
             if versions is not None:
@@ -188,9 +260,10 @@ def package_dict(var_file):
     with open(var_file, 'rb') as f:
         package_vars = yaml.safe_load(f.read())
 
-    pip_pkgs = package_vars.get('service_pip_dependencies')
-    if pip_pkgs:
-        requirements_parse(pkgs=pip_pkgs)
+    for pkgs in BUILT_IN_PIP_PACKAGE_VARS:
+        pip_pkgs = package_vars.get(pkgs)
+        if pip_pkgs and isinstance(pip_pkgs, list):
+            requirements_parse(pkgs=pip_pkgs)
 
     git_repo = package_vars.get('git_repo')
     if git_repo:
@@ -208,22 +281,32 @@ def package_dict(var_file):
         setup_file = None
         for k, v in GIT_REQUIREMENTS_MAP.iteritems():
             if k in git_repo:
-                requirements_request = v % {
-                    'path': git_url.path.lstrip('/'),
-                    'file': package_vars.get(
-                        'requirements_file', 'requirements.txt'
-                    ),
-                    'branch': repo['branch']
-                }
-                req = requests.get(requirements_request)
-                if req.status_code == 200:
-                    requirements = [
-                        i.split()[0] for i in req.text.splitlines()
-                        if i
-                        if not i.startswith('#')
-                    ]
-                    repo['requirements'] = requirements
-                    requirements_parse(pkgs=requirements)
+                for req_file in REQUIREMENTS_FILE_TYPES:
+                    requirements_request = v % {
+                        'path': git_url.path.lstrip('/'),
+                        'file': req_file[1],
+                        'branch': repo['branch']
+                    }
+                    req = requests.get(requirements_request)
+                    LOG.debug(
+                        'Return code [ %s ] while looking for [ %s ]',
+                        req.status_code,
+                        requirements_request
+                    )
+                    if req.status_code == 200:
+                        LOG.debug(
+                            'Found requirements [ %s ]', requirements_request
+                        )
+                        requirements = [
+                            i.split()[0] for i in req.text.splitlines()
+                            if i
+                            if not i.startswith('#')
+                        ]
+                        repo[req_file[1].replace('-', '_')] = requirements
+                        requirements_parse(
+                            pkgs=requirements,
+                            base_type=req_file[0]
+                        )
 
                 setup_request = v % {
                     'path': git_url.path.lstrip('/'),
@@ -397,6 +480,11 @@ def remove_dirs(directory):
 
 
 def copy_file(src, dst):
+    """Copy file from source to destination.
+
+    :param src: ``str`` Path to source file.
+    :param dst: ``str`` Path to destination file.
+    """
     LOG.debug('Copying [ %s ] -> [ %s ]', src, dst)
     with open(src, 'rb') as open_src:
         with open(dst, 'wb') as open_dst:
@@ -410,7 +498,16 @@ def copy_file(src, dst):
 
 def _requirements_maker(name, wheel_dir, release, build_dir, make_opts,
                         link_dir=None, iterate=False):
+    """Parse lists of requirements.
 
+    :param name: ``str`` name of requirements file.
+    :param wheel_dir: ``str`` Path to store wheels.
+    :param release: ``str`` release branch name.
+    :param build_dir: ``str`` Path to build location.
+    :param make_opts: ``list`` List of string options to use when building.
+    :param link_dir: ``Path to link location.
+    :param iterate: ``bol`` Iterate through the list of requirements.
+    """
     if link_dir is None:
         link_dir = wheel_dir
 
@@ -442,11 +539,27 @@ def _requirements_maker(name, wheel_dir, release, build_dir, make_opts,
 
 
 def _make_wheels(wheel_dir, build_dir, temp_store_dir):
+    """Build all of the python wheels.
+
+    :param wheel_dir: ``str`` Path to store wheels.
+    :param build_dir: ``str`` Path to build location.
+    :param temp_store_dir: ``str`` Path to temp directory.
+    """
     LOG.info('Building base packages')
     _requirements_maker(
         name='rpc_base_requirements.txt',
         wheel_dir=temp_store_dir,
         release=PYTHON_PACKAGES['base_release'],
+        build_dir=build_dir,
+        make_opts=None,
+        link_dir=wheel_dir
+    )
+
+    LOG.info('Building test packages')
+    _requirements_maker(
+        name='rpc_test_requirements.txt',
+        wheel_dir=temp_store_dir,
+        release=PYTHON_PACKAGES['test_requirements'],
         build_dir=build_dir,
         make_opts=None,
         link_dir=wheel_dir
@@ -473,7 +586,12 @@ def _make_wheels(wheel_dir, build_dir, temp_store_dir):
         iterate=True
     )
 
+    # Get all of the file names
     built_wheels = get_file_names(temp_store_dir)
+
+    # Sort the files and ensure we don't index *.txt files.
+    built_wheels = sorted([i for i in built_wheels if not i.endswith('.txt')])
+
     PYTHON_PACKAGES['built_files'] = [
         os.path.basename(i) for i in built_wheels
     ]
@@ -520,11 +638,16 @@ def ensure_consistency():
 
     LOG.info('Ensuring the package list is consistent')
     for key in PYTHON_PACKAGES['known_release'].keys():
-        PYTHON_PACKAGES['base_release'].pop(key, None)
+        for release in ['test_requirements', 'base_release']:
+            PYTHON_PACKAGES[release].pop(key, None)
 
 
 def new_setup(user_args, input_path):
-    """Discover all yaml files in the input directory."""
+    """Discover all yaml files in the input directory.
+
+    :param user_args: ``dict`` Arguments that were parsed
+    :param input_path: ``str`` Path to location of yaml files.
+    """
 
     LOG.info('Discovering input file(s)')
     var_files = None

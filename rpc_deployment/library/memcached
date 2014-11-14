@@ -537,7 +537,9 @@ class Memcached(object):
                 msg='The content you attempted to place within memcached'
                     ' was not created. If you are load balancing'
                     ' memcached, attempt to connect to a single node.'
-                    ' Returned a value of unstored keys [ %s ].' % value
+                    ' Returned a value of unstored keys [ %s ] - Original'
+                    ' Connection [ %s ]' 
+                    % (value, [i.__dict__ for i in self.mc.servers])
             )
 
 

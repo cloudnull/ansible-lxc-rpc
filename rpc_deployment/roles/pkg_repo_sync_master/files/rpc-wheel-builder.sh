@@ -51,6 +51,9 @@
 
 set -e -o -v
 
+# Trap any errors that might happen in executing the script
+trap my_trap_handler ERR
+
 # Ensure there is a base path loaded
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
@@ -58,7 +61,7 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 GIT_REPO="${GIT_REPO:-https://github.com/rcbops/ansible-lxc-rpc}"
 GITHUB_API_ENDPOINT="${GITHUB_API_ENDPOINT:-https://api.github.com/repos/rcbops/ansible-lxc-rpc}"
 
-WORK_DIR="${WORK_DIR:-/opt/ansible-lxc-rpc}"
+WORK_DIR="${WORK_DIR:-/tmp/ansible-lxc-rpc}"
 REPO_PACKAGES_PATH="${WORK_DIR}/rpc_deployment/vars/repo_packages/"
 
 OUTPUT_WHEEL_PATH="${OUTPUT_WHEEL_PATH:-/var/www/repo/python_packages}"
@@ -70,51 +73,64 @@ RELEASES=${RELEASES:-""}
 
 EXCLUDE_RELEASES="${EXCLUDE_RELEASES:-v9.0.0 gh-pages revert}"
 
-if [[ ! "${RELEASES}" ]];then
-# From the GITHUB API pull a list of all branches/tags
-RELEASES=$(
-$(which python) <<EOF
-import requests
+LOCKFILE="/tmp/wheel_builder.lock"
 
-# Create an array of excluded items
-EXCLUDE = "${EXCLUDE_RELEASES}".split()
+function my_trap_handler() {
+    kill_job
+}
 
-def return_releases(url):
-    """Return a list of releases found in the github api.
+function lock_file_remove() {
+    if [ -f "${LOCKFILE}" ]; then
+        rm "${LOCKFILE}"
+    fi
+}
 
-    :param url: ``str``
-    """
-    _releases = requests.get(url)
-    loaded_releases = _releases.json()
-    releases = list()
-    for i in loaded_releases:
-        for k, v in i.iteritems():
-            if k == 'name':
-                # if the name is not excluded append it
-                if not any([v.startswith(i) for i in EXCLUDE]):
-                    releases.append(v)
-    else:
-        # Return a unique list.
-        return list(set(releases))
-
-all_releases = list()
-all_releases.extend(return_releases(url="${GITHUB_API_ENDPOINT}/tags"))
-all_releases.extend(return_releases(url="${GITHUB_API_ENDPOINT}/branches"))
-print(' '.join(all_releases))
-EOF
-)
-fi
-
+function kill_job() {
+    set +e
+    # If the job needs killing kill the pid and unlock the file.
+    if [ -f "${LOCKFILE}" ]; then
+        PID="$(cat ${LOCKFILE})"
+        lock_file_remove
+        kill -9 "${PID}"
+    fi
+}
 
 function cleanup() {
     # Ensure workspaces are cleaned up
     rm -rf /tmp/rpc_wheels*
     rm -rf /tmp/pip*
-    rm -rf "${WORK_DIR}"    
+    rm -rf "${WORK_DIR}"
 }
 
+# Check for system lock file.
+if [ ! -f "${LOCKFILE}" ]; then
+    echo $$ | tee "${LOCKFILE}"
+else
+    if [ "$(find ${LOCKFILE} -mmin +240)" ]; then
+        logger "Stale pid found for ${LOCKFILE}."
+        logger "Killing any left over processes and unlocking"
+        kill_job
+    else
+        NOTICE="Active job already in progress. Check pid \"$(cat ${LOCKFILE})\" for status. Lock file: ${LOCKFILE}"
+        echo $NOTICE
+        logger ${NOTICE}
+        exit 1
+    fi
+fi
+
+# Grab releases
+if [[ ! "${RELEASES}" ]];then
+    # From the GITHUB API pull a list of all branches/tags
+    if [ -f "/opt/rpc-branch-grabber.py" ];then
+        RELEASES=$(/opt/rpc-branch-grabber.py "${GITHUB_API_ENDPOINT}" "${EXCLUDE_RELEASES}")
+    else
+        echo "No releases specified and the rpc-branch-grabber.py script was not found."
+        exit 1
+    fi
+fi
 
 # Iterate through the list of releases and build everything that's needed
+logger "Building Python Wheels for ${RELEASES}"
 for release in ${RELEASES}; do
 
     # Perform cleanup
@@ -138,3 +154,6 @@ done
 
 # Perform cleanup
 cleanup
+
+# Remove lock file on job completion
+lock_file_remove

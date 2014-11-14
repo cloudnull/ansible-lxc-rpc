@@ -13,5 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-- include: memcached-container-setup.yml
-- include: memcached-setup.yml
+container_config_options:
+  - "lxc.mount.entry=/openstack/{{ container_name }} var/www none bind 0 0"
+  - "lxc.aa_profile=lxc-openstack"
+
+required_inner_dirs:
+  - "/var/www"
+
+required_outer_dirs:
+  - "/openstack/{{ container_name }}"

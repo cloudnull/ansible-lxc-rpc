@@ -13,5 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-- include: memcached-container-setup.yml
-- include: memcached-setup.yml
+# The purpose here is to allow for the environment to update/build the
+# python wheel files from the CURRENT release, as set in the rpc_release
+# variable.
+- hosts: pkg_repo[0]
+  gather_facts: false
+  user: root
+  tasks:
+    - name: Perform a single package build for the current release
+      shell: >
+        export RELEASES="{{ rpc_release }}";
+        /opt/rpc-wheel-builder.sh

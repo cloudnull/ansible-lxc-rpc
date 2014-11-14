@@ -128,6 +128,9 @@ component_skel:
   swift_cont:
     belongs_to:
     - swift_all
+  pkg_repo:
+    belongs_to:
+    - repo_all
 container_skel:
   cinder_api_container:
     belongs_to:
@@ -292,6 +295,11 @@ container_skel:
     - swift_containers
     contains:
     - swift_cont
+  repo_container:
+    belongs_to:
+    - repo_containers
+    contains:
+    - pkg_repo
 physical_skel:
   network_containers:
     belongs_to:
@@ -335,3 +343,9 @@ physical_skel:
   swift-proxy_hosts:
     belongs_to:
     - hosts
+  repo_hosts:
+    belongs_to:
+    - hosts
+  repo_containers:
+    belongs_to:
+    - all_containers

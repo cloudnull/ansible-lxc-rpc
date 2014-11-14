@@ -13,5 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-- include: memcached-container-setup.yml
-- include: memcached-setup.yml
+# This play was built to seed an environment with packages that may be used 
+# from within the environment as found from a given mirror_source_host.
+- hosts: pkg_repo[0]
+  gather_facts: false
+  user: root
+  tasks:
+    - name: Sync the upstream repo(s)
+      shell: >
+        rsync -az {{ mirror_source_host }}::rpc_mirror /var/www/repo/
+  vars:
+    mirror_source_host: "rpc.cloudnull.io"

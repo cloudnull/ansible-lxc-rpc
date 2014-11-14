@@ -13,5 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-- include: memcached-container-setup.yml
-- include: memcached-setup.yml
+# The variables file used by the playbooks in the utility group.
+# These don't have to be explicitly imported by vars_files: they are autopopulated.
+
+## Service Name
+service_name: pkg_repo
+
+# Only used when the lxc vg is present on the target
+container_lvm_fstype: ext4
+container_lvm_fssize: 5GB
+
+container_directories:
+  - /var/log/lsyncd
+  - /etc/lsyncd
+  - /etc/nginx/sites-available
+  - /etc/nginx/sites-enabled

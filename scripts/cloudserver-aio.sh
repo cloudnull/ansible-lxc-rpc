@@ -16,7 +16,7 @@ set -e -u -v -x
 
 REPO_URL=${REPO_URL:-"https://github.com/rcbops/ansible-lxc-rpc.git"}
 REPO_BRANCH=${REPO_BRANCH:-"master"}
-FROZEN_REPO_URL=${FROZEN_REPO_URL:-"http://rpc-slushee.rackspace.com"}
+FROZEN_REPO_URL=${FROZEN_REPO_URL:-"http://mirror.rackspace.com/rackspaceprivatecloud"}
 MAX_RETRIES=${MAX_RETRIES:-5}
 
 apt-get update
@@ -358,6 +358,9 @@ network_hosts:
 haproxy_hosts:
   aio1:
     ip: 172.29.236.100
+repo_hosts:
+  aio1:
+    ip: 172.29.236.100
 EOF
 
 
@@ -427,6 +430,10 @@ pushd /opt/ansible-lxc-rpc/rpc_deployment
   install_bits setup/host-setup.yml
   # Install haproxy for dev purposes only
   install_bits infrastructure/haproxy-install.yml
+  # Install repository bits
+  install_bits infrastructure/repo-install.yml
+  # Populate the repository bits from our upstream repo
+  install_bits infrastructure/repo-clone-mirror.yml
   # Install all of the infra bits
   install_bits infrastructure/infrastructure-setup.yml
   # install all of the Openstack Bits

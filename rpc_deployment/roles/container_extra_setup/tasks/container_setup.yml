@@ -36,7 +36,7 @@
     command: "config"
     options: "{{ container_config_options }}"
     state: "running"
-  when: container_config_options is defined and is_metal != true
+  when: container_name is defined and container_config_options is defined and is_metal != true
   register: config_extra_changed
   delegate_to: "{{ physical_host }}"
 

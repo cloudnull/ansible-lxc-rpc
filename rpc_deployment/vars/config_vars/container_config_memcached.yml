@@ -13,7 +13,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-memcached_listen: "{{ container_address }}"
-
 container_config_options:
   - "lxc.aa_profile=lxc-openstack"

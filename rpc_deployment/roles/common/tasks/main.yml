@@ -16,6 +16,8 @@
 - include: kernel_check.yml
 - include: repos.yml
 - include: utils.yml
+- include: lock_pip_down.yml
+  when: ansible_hostname not in groups['pkg_repo']
 - include: get_pip.yml
 - include: install_pip_deps.yml
 - include: rpc_release.yml

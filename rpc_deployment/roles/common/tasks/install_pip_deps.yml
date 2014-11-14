@@ -13,6 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+- name: Install common pip dependencies
+  pip:
+    name: "{{ item }}"
+    extra_args: "{{ pip_install_options|default('') }}"
+  with_items: pip_common_packages
+  when: pip_common_packages is defined
+  register: pip_install
+  until: pip_install|success
+  retries: 3
+
 - name: Install pip dependencies
   pip:
     name: "{{ item }}"

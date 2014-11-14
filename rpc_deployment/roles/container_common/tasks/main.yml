@@ -18,4 +18,6 @@
 - include: container_os_setup.yml
 - include: container_repos.yml
 - include: container_packages.yml
+- include: ensure_pip_installed.yml
+- include: install_container_pip_deps.yml
 - include: add_interfaces.yml
